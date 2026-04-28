@@ -3,15 +3,9 @@ pipeline {
 
   stages {
 
-    stage('Clone Repo') {
+    stage('Checkout') {
       steps {
-        git branch: 'main', url: 'https://github.com/dhruubb/tracker-devops.git'
-      }
-    }
-
-    stage('Install Dependencies') {
-      steps {
-        sh 'npm install'
+        git 'https://github.com/dhruubb/tracker-devops.git'
       }
     }
 
@@ -21,9 +15,20 @@ pipeline {
       }
     }
 
+    stage('Stop Old Container') {
+      steps {
+        sh '''
+          docker stop tracker-app || true
+          docker rm tracker-app || true
+        '''
+      }
+    }
+
     stage('Run Container') {
       steps {
-        sh 'docker compose up -d'
+        sh '''
+          docker run -d -p 3000:3000 --name tracker-app tracker-app
+        '''
       }
     }
   }
