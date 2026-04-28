@@ -4,10 +4,10 @@ pipeline {
   stages {
 
     stage('Checkout') {
-      steps {
-        git 'https://github.com/dhruubb/tracker-devops.git'
-      }
-    }
+        steps {
+            git branch: 'main', url: 'https://github.com/dhruubb/tracker-devops.git'
+        }
+        }
 
     stage('Build Docker Image') {
       steps {
