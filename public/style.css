@@ -1,0 +1,10 @@
+body {
+    font-family: Arial;
+    max-width: 500px;
+    margin: auto;
+    padding: 20px;
+  }
+  
+  li {
+    margin: 10px 0;
+  }
