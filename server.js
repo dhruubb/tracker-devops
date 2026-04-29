@@ -97,56 +97,71 @@ app.post("/login", async (req, res) => {
 
 // GET tasks
 app.get("/tasks", auth, async (req, res) => {
-  try {
-    const tasks = await Task.find({ userId: req.user.id });
-    res.json(tasks);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching tasks" });
-  }
-});
+    try {
+      const { date } = req.query;
+  
+      let filter = { userId: req.user.id };
+  
+      if (date) {
+        filter.date = date; // 👈 filter by selected date
+      }
+  
+      const tasks = await Task.find(filter).sort({ createdAt: -1 });
+  
+      res.json(tasks);
+    } catch (err) {
+      res.status(500).json({ message: "Error fetching tasks" });
+    }
+  });
 
 
 // ADD task
 app.post("/tasks", auth, async (req, res) => {
-  try {
-    const { text, cat } = req.body;
-
-    if (!text)
-      return res.status(400).json({ message: "Text required" });
-
-    const task = await Task.create({
-      text,
-      cat: cat || "task",
-      done: false,
-      userId: req.user.id
-    });
-
-    res.json(task);
-  } catch (err) {
-    res.status(500).json({ message: "Error creating task" });
-  }
-});
+    try {
+      const { text, cat, date } = req.body;
+  
+      if (!text || !text.trim())
+        return res.status(400).json({ message: "Text required" });
+  
+      const today = new Date();
+      const localDate = today.getFullYear() + "-" +
+        String(today.getMonth() + 1).padStart(2, "0") + "-" +
+        String(today.getDate()).padStart(2, "0");
+  
+      const task = await Task.create({
+        text,
+        cat: cat || "task",
+        done: false,
+        userId: req.user.id,
+        date: date || localDate
+      });
+  
+      res.json(task);
+    } catch (err) {
+      res.status(500).json({ message: "Error creating task" });
+    }
+  });
 
 
 // TOGGLE task
 app.put("/tasks/:id", auth, async (req, res) => {
-  try {
-    const task = await Task.findOne({
-      _id: req.params.id,
-      userId: req.user.id
-    });
-
-    if (!task)
-      return res.status(404).json({ message: "Task not found" });
-
-    task.done = !task.done;
-    await task.save();
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ message: "Error updating task" });
-  }
-});
+    try {
+      const task = await Task.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+  
+      if (!task)
+        return res.status(404).json({ message: "Task not found" });
+  
+      task.done = !task.done;
+      await task.save();
+  
+      res.json(task); // 👈 better
+    } catch (err) {
+      res.status(500).json({ message: "Error updating task" });
+    }
+  });
 
 
 // DELETE task

@@ -85,6 +85,11 @@
   }
   .logout-btn:hover { border-color: #aaa; color: #1a1a1a; }
 
+    <div style="margin-bottom: 12px;">
+    <input id="datePicker" type="date"
+        style="height:40px; border:1px solid #ddd; border-radius:8px; padding:0 10px;">
+    </div>
+
   .input-row { display: flex; gap: 10px; margin-bottom: 1rem; }
   .input-row input {
     flex: 1; height: 44px;
@@ -204,6 +209,7 @@
       </div>
     </div>
 
+
     <div class="input-row">
       <input id="taskInput" placeholder="Add a task or workout…">
       <button class="btn" onclick="addItem()">+ Add</button>
@@ -276,6 +282,8 @@
       const data = await res.json();
       token = data.token;
       document.getElementById("userLabel").textContent = email;
+      const today = new Date().toISOString().split("T")[0];
+      document.getElementById("datePicker").value = today;
       showPage("page-tracker");
       loadTasks();
     } catch { err.textContent = "Could not reach the server."; }
@@ -289,20 +297,40 @@
 
   /* ── Tasks ── */
   async function loadTasks() {
-    try {
-      const res = await fetch("/tasks", { headers: { Authorization: token } });
-      if (!res.ok) return;
-      const data = await res.json();
-      items = data.map(t => ({ id: t._id, text: t.text, cat: t.cat || "task", done: t.done || false }));
-      render();
-    } catch { /* server offline — work locally */ }
-  }
+  try {
+    const date = document.getElementById("datePicker").value;
+
+    const res = await fetch(`/tasks?date=${date}`, {
+      headers: { Authorization: token }
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+
+    items = data.map(t => ({
+      id: t._id,
+      text: t.text,
+      cat: t.cat || "task",
+      done: t.done || false
+    }));
+
+    render();
+  } catch {}
+}
 
   document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("taskInput").addEventListener("keydown", e => {
-      if (e.key === "Enter") addItem();
-    });
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("datePicker").value = today;
+
+  document.getElementById("taskInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") addItem();
   });
+
+  document.getElementById("datePicker").addEventListener("change", loadTasks);
+
+  loadTasks();
+});
 
   function setcat(c) {
     cat = c;
@@ -315,6 +343,8 @@
   const val = inp.value.trim();
   if (!val) return;
 
+  const date = document.getElementById("datePicker").value; // ✅ move here
+
   try {
     const res = await fetch("/tasks", {
       method: "POST",
@@ -322,13 +352,13 @@
         "Content-Type": "application/json",
         Authorization: token
       },
-      body: JSON.stringify({ text: val, cat })
+      body: JSON.stringify({ text: val, cat, date }) // ✅ correct
     });
 
     const data = await res.json();
 
     items.push({
-      id: data._id,   // ✅ use backend ID
+      id: data._id,
       text: data.text,
       cat: data.cat,
       done: data.done
@@ -341,7 +371,6 @@
     console.log("Failed to add task");
   }
 }
-
   async function toggle(id) {
     const it = items.find(i => i.id === id);
     if (it) it.done = !it.done;
