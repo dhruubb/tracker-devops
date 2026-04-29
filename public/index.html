@@ -311,20 +311,36 @@
   }
 
   async function addItem() {
-    const inp = document.getElementById("taskInput");
-    const val = inp.value.trim();
-    if (!val) return;
-    items.push({ id: Date.now(), text: val, cat, done: false });
-    inp.value = ""; inp.focus();
+  const inp = document.getElementById("taskInput");
+  const val = inp.value.trim();
+  if (!val) return;
+
+  try {
+    const res = await fetch("/tasks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: token
+      },
+      body: JSON.stringify({ text: val, cat })
+    });
+
+    const data = await res.json();
+
+    items.push({
+      id: data._id,   // ✅ use backend ID
+      text: data.text,
+      cat: data.cat,
+      done: data.done
+    });
+
+    inp.value = "";
     render();
-    try {
-      await fetch("/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: token },
-        body: JSON.stringify({ text: val, cat })
-      });
-    } catch { /* local-only fallback */ }
+
+  } catch {
+    console.log("Failed to add task");
   }
+}
 
   async function toggle(id) {
     const it = items.find(i => i.id === id);
@@ -344,16 +360,31 @@
   }
 
   function renderList(elId, arr) {
-    const ul = document.getElementById(elId);
-    if (!arr.length) { ul.innerHTML = '<li class="empty">Nothing here yet</li>'; return; }
-    ul.innerHTML = arr.map(it => `
-      <li class="item${it.done ? " done" : ""}">
-        <div class="item-check" onclick="toggle(${JSON.stringify(it.id)})"><div class="item-check-mark"></div></div>
-        <span class="item-text">${it.text}</span>
-        <span class="item-tag tag-${it.cat}">${it.cat}</span>
-        <button class="item-del" onclick="del(${JSON.stringify(it.id)})" title="Remove">×</button>
-      </li>`).join("");
+  const ul = document.getElementById(elId);
+
+  if (!arr.length) {
+    ul.innerHTML = '<li class="empty">Nothing here yet</li>';
+    return;
   }
+
+  ul.innerHTML = arr.map(it => `
+    <li class="item${it.done ? " done" : ""}">
+      <div class="item-check" onclick="toggle('${it.id}')">
+        <div class="item-check-mark"></div>
+      </div>
+
+      <span class="item-text">${it.text}</span>
+
+      <span class="item-tag tag-${it.cat}">
+        ${it.cat}
+      </span>
+
+      <button class="item-del" onclick="del('${it.id}')" title="Remove">
+        ×
+      </button>
+    </li>
+  `).join("");
+}
 
   function render() {
     const tasks    = items.filter(i => i.cat === "task");

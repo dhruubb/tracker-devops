@@ -19,15 +19,21 @@ mongoose.connect(process.env.MONGO_URI)
 
 // ===== AUTH MIDDLEWARE =====
 function auth(req, res, next) {
-  const token = req.headers.authorization;
-  if (!token) return res.status(401).json({ message: "No token" });
+  const header = req.headers.authorization;
+
+  if (!header)
+    return res.status(401).json({ message: "No token provided" });
+
+  const token = header.startsWith("Bearer ")
+    ? header.split(" ")[1]
+    : header;
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch {
-    res.status(403).json({ message: "Invalid token" });
+    return res.status(403).json({ message: "Invalid token" });
   }
 }
 
@@ -48,10 +54,7 @@ app.post("/register", async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
-      email,
-      password: hashed
-    });
+    await User.create({ email, password: hashed });
 
     res.json({ message: "User created" });
 
@@ -77,7 +80,8 @@ app.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id },
-      process.env.JWT_SECRET
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
     );
 
     res.json({ token });
@@ -91,42 +95,75 @@ app.post("/login", async (req, res) => {
 
 // ===== TASKS =====
 
-// GET tasks (user-specific)
+// GET tasks
 app.get("/tasks", auth, async (req, res) => {
-  const tasks = await Task.find({ userId: req.user.id });
-  res.json(tasks);
+  try {
+    const tasks = await Task.find({ userId: req.user.id });
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching tasks" });
+  }
 });
+
 
 // ADD task
 app.post("/tasks", auth, async (req, res) => {
-  const { text, cat } = req.body;
+  try {
+    const { text, cat } = req.body;
 
-  const task = await Task.create({
-    text,
-    cat,
-    done: false,
-    userId: req.user.id
-  });
+    if (!text)
+      return res.status(400).json({ message: "Text required" });
 
-  res.json(task);
+    const task = await Task.create({
+      text,
+      cat: cat || "task",
+      done: false,
+      userId: req.user.id
+    });
+
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ message: "Error creating task" });
+  }
 });
 
-// TOGGLE
+
+// TOGGLE task
 app.put("/tasks/:id", auth, async (req, res) => {
-  const task = await Task.findById(req.params.id);
+  try {
+    const task = await Task.findOne({
+      _id: req.params.id,
+      userId: req.user.id
+    });
 
-  if (!task) return res.sendStatus(404);
+    if (!task)
+      return res.status(404).json({ message: "Task not found" });
 
-  task.done = !task.done;
-  await task.save();
+    task.done = !task.done;
+    await task.save();
 
-  res.json({ success: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: "Error updating task" });
+  }
 });
 
-// DELETE
+
+// DELETE task
 app.delete("/tasks/:id", auth, async (req, res) => {
-  await Task.findByIdAndDelete(req.params.id);
-  res.json({ success: true });
+  try {
+    const task = await Task.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.id
+    });
+
+    if (!task)
+      return res.status(404).json({ message: "Task not found" });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: "Error deleting task" });
+  }
 });
 
 
