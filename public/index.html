@@ -72,7 +72,6 @@
 
   .auth-logo { font-size: 22px; font-weight: 700; margin-bottom: 1.75rem; letter-spacing: -0.02em; }
 
-  /* tracker */
   .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; }
   .top-bar .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 
@@ -85,10 +84,14 @@
   }
   .logout-btn:hover { border-color: #aaa; color: #1a1a1a; }
 
-    <div style="margin-bottom: 12px;">
-    <input id="datePicker" type="date"
-        style="height:40px; border:1px solid #ddd; border-radius:8px; padding:0 10px;">
-    </div>
+  #datePicker {
+    height: 40px; margin-bottom: 12px;
+    border: 1px solid #ddd; border-radius: 8px; padding: 0 10px;
+    font-family: 'Syne', sans-serif; font-size: 13px;
+    color: #1a1a1a; background: #fff;
+    outline: none; cursor: pointer; display: block;
+  }
+  #datePicker:focus { border-color: #aaa; }
 
   .input-row { display: flex; gap: 10px; margin-bottom: 1rem; }
   .input-row input {
@@ -209,6 +212,7 @@
       </div>
     </div>
 
+    <input id="datePicker" type="date">
 
     <div class="input-row">
       <input id="taskInput" placeholder="Add a task or workout…">
@@ -239,182 +243,202 @@
   let cat = "task";
   let items = [];
 
+  // ── Helpers ──
+  function today() {
+    return new Date().toISOString().split("T")[0];
+  }
+
   function showPage(id) {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(id).classList.add("active");
   }
 
-  /* ── Register ── */
+  // ── DOMContentLoaded: safe wiring ──
+  document.addEventListener("DOMContentLoaded", () => {
+    const picker = document.getElementById("datePicker");
+    if (picker) {
+      picker.value = today();
+      picker.addEventListener("change", () => {
+        if (token) loadTasks();
+      });
+    }
+
+    const input = document.getElementById("taskInput");
+    if (input) {
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") addItem();
+      });
+    }
+  });
+
+  // ── Register ──
   async function register() {
     const email = document.getElementById("regEmail").value.trim();
     const pass  = document.getElementById("regPass").value;
     const pass2 = document.getElementById("regPassConfirm").value;
     const err   = document.getElementById("regError");
+
     if (!email || !pass) { err.textContent = "Please fill in all fields."; return; }
     if (pass !== pass2)  { err.textContent = "Passwords do not match."; return; }
     err.textContent = "";
+
     try {
       const res = await fetch("/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password: pass })
       });
-      if (!res.ok) { const d = await res.json(); err.textContent = d.message || "Registration failed."; return; }
+      if (!res.ok) {
+        const d = await res.json();
+        err.textContent = d.message || "Registration failed.";
+        return;
+      }
       showPage("page-login");
       document.getElementById("logEmail").value = email;
-    } catch { err.textContent = "Could not reach the server."; }
+    } catch {
+      err.textContent = "Could not reach the server.";
+    }
   }
 
-  /* ── Login ── */
+  // ── Login ──
   async function login() {
     const email = document.getElementById("logEmail").value.trim();
     const pass  = document.getElementById("logPass").value;
     const err   = document.getElementById("logError");
+
     if (!email || !pass) { err.textContent = "Please fill in all fields."; return; }
     err.textContent = "";
+
     try {
       const res = await fetch("/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password: pass })
       });
-      if (!res.ok) { const d = await res.json(); err.textContent = d.message || "Invalid credentials."; return; }
+      if (!res.ok) {
+        const d = await res.json();
+        err.textContent = d.message || "Invalid credentials.";
+        return;
+      }
       const data = await res.json();
       token = data.token;
       document.getElementById("userLabel").textContent = email;
-      const today = new Date().toISOString().split("T")[0];
-      document.getElementById("datePicker").value = today;
+      document.getElementById("datePicker").value = today();
       showPage("page-tracker");
       loadTasks();
-    } catch { err.textContent = "Could not reach the server."; }
+    } catch {
+      err.textContent = "Could not reach the server.";
+    }
   }
 
+  // ── Logout ──
   function logout() {
-    token = ""; items = []; cat = "task";
+    token = "";
+    items = [];
+    cat = "task";
     render();
     showPage("page-login");
   }
 
-  /* ── Tasks ── */
+  // ── Load tasks from server ──
   async function loadTasks() {
-  try {
-    const date = document.getElementById("datePicker").value;
+    try {
+      const date = document.getElementById("datePicker").value;
+      const res = await fetch(`/tasks?date=${date}`, {
+        headers: { Authorization: token }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      items = data.map(t => ({
+        id:   t._id,
+        text: t.text,
+        cat:  t.cat || "task",
+        done: t.done || false
+      }));
+      render();
+    } catch (err) {
+      console.error("Failed to load tasks:", err);
+    }
+  }
 
-    const res = await fetch(`/tasks?date=${date}`, {
-      headers: { Authorization: token }
-    });
-
-    if (!res.ok) return;
-
-    const data = await res.json();
-
-    items = data.map(t => ({
-      id: t._id,
-      text: t.text,
-      cat: t.cat || "task",
-      done: t.done || false
-    }));
-
-    render();
-  } catch {}
-}
-
-  document.addEventListener("DOMContentLoaded", () => {
-  const today = new Date().toISOString().split("T")[0];
-  document.getElementById("datePicker").value = today;
-
-  document.getElementById("taskInput").addEventListener("keydown", e => {
-    if (e.key === "Enter") addItem();
-  });
-
-  document.getElementById("datePicker").addEventListener("change", loadTasks);
-
-  loadTasks();
-});
-
+  // ── Category selector ──
   function setcat(c) {
     cat = c;
     document.getElementById("btn-task").className    = "cat-btn" + (c === "task"    ? " active-task"    : "");
     document.getElementById("btn-workout").className = "cat-btn" + (c === "workout" ? " active-workout" : "");
   }
 
+  // ── Add item ──
   async function addItem() {
-  const inp = document.getElementById("taskInput");
-  const val = inp.value.trim();
-  if (!val) return;
+    const inp = document.getElementById("taskInput");
+    const val = inp.value.trim();
+    if (!val) return;
+    const date = document.getElementById("datePicker").value;
 
-  const date = document.getElementById("datePicker").value; // ✅ move here
-
-  try {
-    const res = await fetch("/tasks", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token
-      },
-      body: JSON.stringify({ text: val, cat, date }) // ✅ correct
-    });
-
-    const data = await res.json();
-
-    items.push({
-      id: data._id,
-      text: data.text,
-      cat: data.cat,
-      done: data.done
-    });
-
-    inp.value = "";
-    render();
-
-  } catch {
-    console.log("Failed to add task");
+    try {
+      const res = await fetch("/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: token },
+        body: JSON.stringify({ text: val, cat, date })
+      });
+      if (!res.ok) { console.error("Add failed"); return; }
+      const data = await res.json();
+      items.push({ id: data._id, text: data.text, cat: data.cat, done: data.done });
+      inp.value = "";
+      render();
+    } catch (err) {
+      console.error("Failed to add task:", err);
+    }
   }
-}
+
+  // ── Toggle done ──
   async function toggle(id) {
     const it = items.find(i => i.id === id);
     if (it) it.done = !it.done;
     render();
     try {
-      await fetch(`/tasks/${id}`, { method: "PUT", headers: { Authorization: token } });
-    } catch { /* local-only fallback */ }
+      await fetch(`/tasks/${id}`, {
+        method: "PUT",
+        headers: { Authorization: token }
+      });
+    } catch (err) {
+      console.error("Failed to toggle task:", err);
+    }
   }
 
+  // ── Delete item ──
   async function del(id) {
     items = items.filter(i => i.id !== id);
     render();
     try {
-      await fetch(`/tasks/${id}`, { method: "DELETE", headers: { Authorization: token } });
-    } catch { /* local-only fallback */ }
+      await fetch(`/tasks/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: token }
+      });
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+    }
   }
 
+  // ── Render list ──
   function renderList(elId, arr) {
-  const ul = document.getElementById(elId);
-
-  if (!arr.length) {
-    ul.innerHTML = '<li class="empty">Nothing here yet</li>';
-    return;
+    const ul = document.getElementById(elId);
+    if (!arr.length) {
+      ul.innerHTML = '<li class="empty">Nothing here yet</li>';
+      return;
+    }
+    ul.innerHTML = arr.map(it => `
+      <li class="item${it.done ? " done" : ""}">
+        <div class="item-check" onclick="toggle('${it.id}')">
+          <div class="item-check-mark"></div>
+        </div>
+        <span class="item-text">${it.text}</span>
+        <span class="item-tag tag-${it.cat}">${it.cat}</span>
+        <button class="item-del" onclick="del('${it.id}')" title="Remove">×</button>
+      </li>`).join("");
   }
 
-  ul.innerHTML = arr.map(it => `
-    <li class="item${it.done ? " done" : ""}">
-      <div class="item-check" onclick="toggle('${it.id}')">
-        <div class="item-check-mark"></div>
-      </div>
-
-      <span class="item-text">${it.text}</span>
-
-      <span class="item-tag tag-${it.cat}">
-        ${it.cat}
-      </span>
-
-      <button class="item-del" onclick="del('${it.id}')" title="Remove">
-        ×
-      </button>
-    </li>
-  `).join("");
-}
-
+  // ── Render all ──
   function render() {
     const tasks    = items.filter(i => i.cat === "task");
     const workouts = items.filter(i => i.cat === "workout");
