@@ -23,24 +23,6 @@ app.get('/metrics', async (req, res) => {
 
 
 // example: tests/auth.test.js
-const request = require("supertest");
-const app = require("../server");
-
-test("POST /register creates a user", async () => {
-  const res = await request(app).post("/register").send({
-    email: "test@test.com",
-    password: "123456"
-  });
-  expect(res.statusCode).toBe(200);
-});
-
-test("POST /login fails with wrong password", async () => {
-  const res = await request(app).post("/login").send({
-    email: "test@test.com",
-    password: "wrongpass"
-  });
-  expect(res.statusCode).toBe(401);
-});
 
 // ===== DB CONNECT =====
 mongoose.connect(process.env.MONGO_URI)
@@ -213,6 +195,10 @@ app.delete("/tasks/:id", auth, async (req, res) => {
 });
 
 
-app.listen(3000, () => {
-  console.log("🚀 Server running on http://localhost:3000");
-});
+if (require.main === module) {
+    app.listen(3000, () => {
+      console.log("🚀 Server running on http://localhost:3000");
+    });
+  }
+  
+  module.exports = app;

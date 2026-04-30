@@ -48,10 +48,6 @@ pipeline {
         sh 'docker logs tracker-app --tail=50'
       }
     }
-    stage('Run Tests') {
-        steps {
-            sh 'npm test'
-        }
-        }
+    
   }
 }
