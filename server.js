@@ -11,17 +11,59 @@ const app = express();
 app.use(express.json());
 app.use(express.static("public"));
 
-const client = require('prom-client');
+// ✅ Use ONE variable name
+const promClient = require('prom-client');
 
-const collectDefaultMetrics = client.collectDefaultMetrics;
-collectDefaultMetrics();
+// collect default metrics (CPU, memory, etc.)
+promClient.collectDefaultMetrics();
 
-app.get('/metrics', async (req, res) => {
-  res.set('Content-Type', client.register.contentType);
-  res.end(await client.register.metrics());
+
+// ── Custom Metrics ──
+
+// Request count
+const httpRequests = new promClient.Counter({
+  name: 'http_requests_total',
+  help: 'Total number of HTTP requests',
+  labelNames: ['method', 'route', 'status']
+});
+
+// Request duration
+const httpRequestDuration = new promClient.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests',
+  labelNames: ['method', 'route'],
+  buckets: [0.1, 0.3, 0.5, 1, 2]
 });
 
 
+// ── Middleware ──
+
+// Count requests
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    httpRequests
+      .labels(req.method, req.path, res.statusCode)
+      .inc();
+  });
+  next();
+});
+
+// Measure duration
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+  res.on('finish', () => {
+    end({ method: req.method, route: req.path });
+  });
+  next();
+});
+
+
+// ── Metrics Route ──
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', promClient.register.contentType);
+  res.end(await promClient.register.metrics());
+});
 // example: tests/auth.test.js
 
 // ===== DB CONNECT =====
@@ -195,10 +237,12 @@ app.delete("/tasks/:id", auth, async (req, res) => {
 });
 
 
-if (require.main === module) {
-    app.listen(3000, () => {
-      console.log("🚀 Server running on http://localhost:3000");
-    });
-  }
-  
-  module.exports = app;
+const PORT = 3000;
+
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, () => {
+    console.log(`Server running on ${PORT}`);
+  });
+}
+
+module.exports = app;
